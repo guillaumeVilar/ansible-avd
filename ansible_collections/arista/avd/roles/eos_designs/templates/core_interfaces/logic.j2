@@ -97,6 +97,10 @@
 {%         set p2p_interface.description = "P2P_LINK_TO_" ~ p2p_interface.peer ~ "_" ~ p2p_interface.peer_interface %}
 {%         set p2p_interface.mpls_ip = p2p_link.mpls_ip | arista.avd.default(link_info.p2p_profile.mpls_ip, true) %}
 {%         set p2p_interface.raw_eos_cli = p2p_link.raw_eos_cli | arista.avd.default(link_info.p2p_profile.raw_eos_cli) %}
+
+{%         set vrf = p2p_link.vrf | arista.avd.default(
+                            link_info.p2p_profile.vrf, ["default", "default"]) %}
+
 {%         if p2p_link.port_channel is not arista.avd.defined %}
 {%             do core_interfaces_data.p2p_interfaces.update({ node_interface: p2p_interface }) %}
 {%         else %}
@@ -105,15 +109,17 @@
 {%         if p2p_link.include_in_underlay_protocol | arista.avd.default(
               link_info.p2p_profile.include_in_underlay_protocol, true) is arista.avd.defined(true) %}
 {# Include in underlay routing. Build routing data #}
-{%             if switch.underlay_routing_protocol in ["ebgp","ibgp"] %}
+{%             if switch.underlay_routing_protocol in ["ebgp","ibgp", "ospf"] %}
 {%                 set as = p2p_link.as | arista.avd.default(
                             link_info.p2p_profile.as) %}
 {%                 set p2p_bgp_neighbor = namespace() %}
 {%                 set p2p_bgp_neighbor.remote_as = as[peer_index] %}
 {%                 set p2p_bgp_neighbor.description = p2p_interface.peer %}
-{%                 set p2p_bgp_neighbor.peer_group = switch.bgp_peer_groups.ipv4_underlay_peers.name %}
 {%                 set p2p_bgp_neighbor.bfd = p2p_link.bfd | arista.avd.default(
                                               link_info.p2p_profile.bfd) %}
+
+{%                 set p2p_bgp_neighbor.vrf = vrf[node_index] %}
+
 {%                 if switch.bgp_as is arista.avd.defined and as[node_index] | string != switch.bgp_as %}
 {%                     set p2p_bgp_neighbor.local_as = as[node_index] | string %}
 {%                 endif %}

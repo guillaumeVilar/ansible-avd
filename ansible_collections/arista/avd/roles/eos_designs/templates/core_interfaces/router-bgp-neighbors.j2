@@ -13,19 +13,67 @@ router_bgp:
 
 {%     else %}
 {# Regular EBGP peerings #}
+
+
+{# Going through all the links to classify the links in a dict per VRF #}
+{% set core_interfaces_data.bgp_vrfs = {} %}
+{% for bgp_neighbor_key in core_interfaces_data.bgp_neighbors | arista.avd.natural_sort %}
+{%    set bgp_neighbor = core_interfaces_data.bgp_neighbors[bgp_neighbor_key] %}
+
+{%    set vrf = bgp_neighbor.vrf %}
+{%    if not vrf in core_interfaces_data.bgp_vrfs %}
+{%       do core_interfaces_data.bgp_vrfs.update({ vrf: {} }) %}
+{%    endif %}
+{%    do core_interfaces_data.bgp_vrfs[vrf].update({bgp_neighbor_key: bgp_neighbor}) %}
+{% endfor %}
+
+
+{# EBGP configuration on default VRF  - only execute this if we have at least 1 bgp key in default VRF #}
+{% if "default" in core_interfaces_data.bgp_vrfs %}
   neighbors:
-{%         for bgp_neighbor_key in core_interfaces_data.bgp_neighbors | arista.avd.natural_sort %}
-{%             set bgp_neighbor = core_interfaces_data.bgp_neighbors[bgp_neighbor_key] %}
+{%   for bgp_neighbor_key in core_interfaces_data.bgp_vrfs["default"] %}
+{%     set bgp_neighbor = core_interfaces_data.bgp_vrfs["default"][bgp_neighbor_key] %}
     {{ bgp_neighbor_key }}:
       remote_as: "{{ bgp_neighbor.remote_as }}"
       description: {{ bgp_neighbor.description }}
-      peer_group: {{ bgp_neighbor.peer_group }}
-{%             if bgp_neighbor.bfd is arista.avd.defined(true) %}
+      peer_group: CORE-BL-GROUP
+{%     if bgp_neighbor.bfd is arista.avd.defined(true) %}
       bfd: true
-{%             endif %}
-{%             if bgp_neighbor.local_as is arista.avd.defined %}
-      local_as: "{{ bgp_neighbor.local_as }}"
-{%             endif %}
-{%         endfor %}
 {%     endif %}
+{%     if bgp_neighbor.local_as is arista.avd.defined %}
+      local_as: "{{ bgp_neighbor.local_as }}"
+{%     endif %}
+
+{%   endfor %}
+{% endif %}
+
+
+
+{# EBGP configuration on non-default VRF #}
+{# TODO: Fix here if we want to support  mix of default VRF with non-default VRF per switch#}
+{% if "default" not in core_interfaces_data.bgp_vrfs %}
+  vrfs:
+{# TODO: We should exclude here the default VRF if a mix of non-default VRF and VRF interface needs to be supported#}
+{% for vrf in core_interfaces_data.bgp_vrfs | arista.avd.natural_sort %}
+    {{ vrf }}:
+      neighbors:
+{%     for bgp_neighbor_key in core_interfaces_data.bgp_vrfs[vrf] | arista.avd.natural_sort%}
+{%       set bgp_neighbor = core_interfaces_data.bgp_vrfs[vrf][bgp_neighbor_key] %}
+
+        {{ bgp_neighbor_key }}:
+          remote_as: "{{ bgp_neighbor.remote_as }}"
+          description: {{ bgp_neighbor.description }}
+          peer_group: CORE-BL-GROUP
+{%       if bgp_neighbor.bfd is arista.avd.defined(true) %}
+          bfd: true
+{%       endif %}
+{%       if bgp_neighbor.local_as is arista.avd.defined %}
+          local_as: "{{ bgp_neighbor.local_as }}"
+{%       endif %}
+{%     endfor %}
+{% endfor %}
+{% endif %}
+
+
+{%    endif %}
 {% endif %}
